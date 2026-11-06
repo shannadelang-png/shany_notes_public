@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shany Notes</title>
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { font-family: system-ui, sans-serif; font-size: 16px; line-height: 1.45; color: #1d1d1f; background: #fafafa;
+           max-width: 42rem; margin: 0 auto; padding: 1rem; }
+    h1 { font-size: 1.4rem; margin: 0; } h2 { font-size: 1.25rem; margin: .5rem 0; } h3 { font-size: 1.05rem; margin: 1.25rem 0 .5rem; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+    button, input, select, textarea { font: inherit; font-size: 16px; }
+    button { min-height: 44px; padding: .5rem .9rem; border: 1px solid #555; border-radius: 8px; background: #fff; color: #1d1d1f; cursor: pointer; }
+    button.primary { background: #1f4f99; border-color: #1f4f99; color: #fff; }
+    input, select, textarea { min-height: 44px; padding: .5rem; border: 1px solid #767676; border-radius: 8px; background: #fff; width: 100%; }
+    input[type=checkbox] { width: 1.3rem; min-height: 1.3rem; margin: 0; }
+    :focus-visible { outline: 3px solid #e07b00; outline-offset: 2px; }
+    label { display: block; font-weight: 600; margin: .75rem 0 .25rem; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: .75rem; margin-bottom: .6rem; }
+    .project-btn { width: 100%; text-align: left; display: block; }
+    .meta { color: #555; font-size: .9rem; margin: .2rem 0; }
+    .title { font-weight: 600; }
+    .row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+    .filters { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .filters label { margin-top: 0; }
+    .tags { display: flex; flex-wrap: wrap; gap: .25rem .9rem; }
+    .tags label { display: flex; align-items: center; gap: .4rem; font-weight: normal; min-height: 44px; margin: 0; }
+    .notes { white-space: pre-wrap; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: .75rem; overflow-wrap: anywhere; }
+    textarea { min-height: 55vh; resize: vertical; white-space: pre-wrap; }
+    .msg { min-height: 1.4em; margin: .5rem 0; }
+    .ok { color: #1a6b32; } .err { color: #b3261e; }
+    .notes-inline { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .late { color: #b3261e; font-weight: 600; }
+    details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+    .tabs button { flex: 1; }
+    .subtabs { flex-wrap: wrap; }
+    .subtabs button { flex: 1 1 auto; padding: .5rem .6rem; }
+    .tabs button[aria-pressed=true] { background: #1f4f99; border-color: #1f4f99; color: #fff; font-weight: 600; }
+    .done { color: #5f5f5f; background: #f2f2f2; }
+    .done .title { text-decoration: line-through; font-weight: normal; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Shany Notes</h1>
+    <button id="logout" type="button" hidden>Log out</button>
+  </header>
+  <nav id="tabs" class="tabs" aria-label="Views" hidden>
+    <button type="button" id="tab-journal" aria-pressed="true">Journal</button>
+    <button type="button" id="tab-projects" aria-pressed="false">Projects</button>
+  </nav>
+  <p id="global-msg" class="msg err" role="alert"></p>
+
+  <!-- Login -->
+  <form id="login" hidden>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <div class="row"><button class="primary" type="submit">Log in</button></div>
+    <p id="login-msg" class="msg err" role="alert"></p>
+  </form>
+
+  <!-- Journal (start screen): sub-tabs today, this week, this month, next month, no date -->
+  <section id="journal-view" hidden>
+    <h2>Journal</h2>
+    <details id="j-add-box" class="card">
+      <summary>Quick add</summary>
+      <form id="j-add-form">
+        <label for="j-title">Title</label>
+        <input id="j-title" required>
+        <label for="j-project">Project</label>
+        <select id="j-project" required></select>
+        <label for="j-due">Due date</label>
+        <input id="j-due" type="date">
+        <fieldset style="border:0;padding:0;margin:.75rem 0 0">
+          <legend style="font-weight:600">Tags</legend>
+          <div id="j-tags" class="tags"></div>
+        </fieldset>
+        <div class="row"><button class="primary" type="submit">Add action</button></div>
+        <p id="j-add-msg" class="msg" role="status"></p>
+      </form>
+    </details>
+    <label for="j-tag">Tag</label>
+    <select id="j-tag"><option value="">All tags</option></select>
+    <nav class="tabs subtabs" aria-label="Journal periods" style="margin-top:1rem">
+      <button type="button" data-jtab="today" aria-pressed="true">Today</button>
+      <button type="button" data-jtab="week" aria-pressed="false">This week</button>
+      <button type="button" data-jtab="month" aria-pressed="false">This month</button>
+      <button type="button" data-jtab="next" aria-pressed="false">Next month</button>
+      <button type="button" data-jtab="nodate" aria-pressed="false">No date</button>
+    </nav>
+    <div id="journal"></div>
+  </section>
+
+  <!-- Projects list -->
+  <section id="list-view" hidden>
+    <h2>Projects</h2>
+    <ul id="projects"></ul>
+  </section>
+
+  <!-- Project detail -->
+  <section id="detail-view" hidden>
+    <button type="button" id="back-to-list">&larr; All projects</button>
+    <h2 id="p-name"></h2>
+    <p id="p-meta" class="meta"></p>
+    <details id="p-notes-box">
+      <summary>Project notes (read-only)</summary>
+      <div id="p-notes" class="notes"></div>
+    </details>
+
+    <h3>Actions</h3>
+    <div class="filters">
+      <div><label for="f-status">Status</label>
+        <select id="f-status"><option value="">All statuses</option></select></div>
+      <div><label for="f-tag">Tag</label>
+        <select id="f-tag"><option value="">All tags</option></select></div>
+    </div>
+    <p class="meta">Sorted by due date (no date last).</p>
+    <div id="actions"></div>
+
+    <h3>Add action</h3>
+    <form id="add-form" class="card">
+      <label for="a-title">Title</label>
+      <input id="a-title" required>
+      <label for="a-due">Due date (optional)</label>
+      <input id="a-due" type="date">
+      <fieldset style="border:0;padding:0;margin:.75rem 0 0">
+        <legend style="font-weight:600">Tags</legend>
+        <div id="a-tags" class="tags"></div>
+      </fieldset>
+      <div class="row"><button class="primary" type="submit">Add action</button></div>
+      <p id="add-msg" class="msg" role="status"></p>
+    </form>
+  </section>
+
+  <!-- Action notes editor -->
+  <section id="notes-view" hidden>
+    <button type="button" id="back-to-detail">&larr; Back</button>
+    <h2 id="n-title"></h2>
+    <p id="n-path" class="meta"></p>
+    <label for="n-text">Notes (Markdown, saved to Supabase; the .md file updates at the next sync)</label>
+    <textarea id="n-text"></textarea>
+    <div class="row"><button class="primary" type="button" id="n-save">Save notes</button></div>
+    <p id="n-msg" class="msg" role="status"></p>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"></script>
+  <script>
+    // Must match the check constraints in supabase/migrations/.
+    const STATUSES = ["not started", "doing", "done"];
+    const ACTION_TAGS = ["Notes", "User story", "Roadmap", "AI", "PO", "Social Media", "Discovery", "Delivery", "Backlog"];
+    const MD_PATH_RE = /^TasksAndActions\/[a-z0-9-]+\/[a-z0-9-]+\.md$/;
+
+    const $ = (id) => document.getElementById(id);
+    const VIEWS = ["login", "journal-view", "list-view", "detail-view", "notes-view"];
+    const COLS = "id,project_id,title,description,due_date,status,tags,md_path,notes_md";
+    let db = null, projects = [], project = null, actions = [], noteAction = null, dirty = false, appShown = false;
+    let tab = "journal", jActions = [], jTab = "today";   // jTab = active journal sub-tab
+
+    // ---------- small helpers ----------
+    function el(tag, props = {}, ...children) {
+      const e = document.createElement(tag);
+      for (const [k, v] of Object.entries(props)) {
+        if (k === "class") e.className = v;
+        else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+        else if (k === "text") e.textContent = v;
+        else e.setAttribute(k, v);
+      }
+      for (const c of children) if (c != null) e.append(c);   // strings become text nodes, never HTML
+      return e;
+    }
+    const icon = (emoji, label) => el("span", { role: "img", "aria-label": label, title: label, text: emoji + " " });
+    function show(view) { VIEWS.forEach((v) => ($(v).hidden = v !== view)); window.scrollTo(0, 0); }
+    function msg(id, text, cls = "") { $(id).textContent = text; $(id).className = "msg " + cls; }
+
+    // Dates are YYYY-MM-DD strings in the local time zone (never new Date("YYYY-MM-DD"), which is UTC).
+    const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const todayLocal = () => ymd(new Date());
+    function dateRanges(now = new Date()) {   // week = Monday to Sunday
+      const y = now.getFullYear(), m = now.getMonth(), d = now.getDate(), fromMon = (now.getDay() + 6) % 7;
+      return { today: ymd(new Date(y, m, d)),
+               weekStart: ymd(new Date(y, m, d - fromMon)), weekEnd: ymd(new Date(y, m, d - fromMon + 6)),
+               monthStart: ymd(new Date(y, m, 1)), monthEnd: ymd(new Date(y, m + 1, 0)),
+               // month m + 1 rolls over to January of next year; day 0 of m + 2 = last day of next month
+               nextStart: ymd(new Date(y, m + 1, 1)), nextEnd: ymd(new Date(y, m + 2, 0)) };
+    }
+    // Readable range from two YYYY-MM-DD strings: "2–8 Nov", "30 Nov – 6 Dec", "28 Dec 2026 – 3 Jan 2027".
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    function fmtRange(from, to) {
+      const [y1, m1, d1] = from.split("-").map(Number), [y2, m2, d2] = to.split("-").map(Number);
+      if (y1 !== y2) return `${d1} ${MONTHS[m1 - 1]} ${y1} – ${d2} ${MONTHS[m2 - 1]} ${y2}`;
+      if (m1 !== m2) return `${d1} ${MONTHS[m1 - 1]} – ${d2} ${MONTHS[m2 - 1]}`;
+      return `${d1}–${d2} ${MONTHS[m1 - 1]}`;
+    }
+    const isLate = (a) => !!a.due_date && a.due_date < todayLocal() && a.status !== "done";
+    const byDue = (x, y) => (x.due_date || "9999") < (y.due_date || "9999") ? -1
+                          : (x.due_date || "9999") > (y.due_date || "9999") ? 1 : x.title.localeCompare(y.title);
+
+    // Same as scripts/shany_db.py slug()
+    const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "untitled";
+    // Same as template() in scripts/sync-action-notes.py
+    function notesTemplate(a, projectName) {
+      const tags = a.tags.length ? a.tags.join(", ") : "-";
+      return `# ${a.title}\n\n- Project: ${projectName}\n- Due: ${a.due_date || "-"}\n- Tags: ${tags}\n\n## Notes\n`;
+    }
+
+    // Short, readable error text. Returns true if the session expired.
+    function errText(error) {
+      if (error.code === "23514" || error.code === "22P02") return "Invalid tag/status, not saved.";
+      if (error.code === "PGRST301" || error.code === "PGRST303" || /jwt/i.test(error.message || "")) {
+        db.auth.signOut({ scope: "local" });
+        return "Your session expired. Please log in again.";
+      }
+      return "Something went wrong: " + (error.message || "unknown error");
+    }
+
+    // ---------- auth ----------
+    function showLogin() {
+      appShown = false; dirty = false;
+      $("logout").hidden = true; $("tabs").hidden = true;
+      show("login");
+    }
+    async function showApp() {
+      if (appShown) return;
+      appShown = true;
+      $("logout").hidden = false; $("tabs").hidden = false;
+      msg("login-msg", "");
+      if (await fetchProjects()) goTab("journal");
+    }
+
+    // ---------- tabs ----------
+    async function goTab(t) {
+      if (dirty && !confirm("You have unsaved notes. Leave without saving?")) return;
+      dirty = false; tab = t;
+      $("tab-journal").setAttribute("aria-pressed", String(t === "journal"));
+      $("tab-projects").setAttribute("aria-pressed", String(t === "projects"));
+      t === "journal" ? loadJournal() : loadProjects();
+    }
+    $("tab-journal").addEventListener("click", () => goTab("journal"));
+    $("tab-projects").addEventListener("click", () => goTab("projects"));
+
+    $("login").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg("login-msg", "Logging in...");
+      const { error } = await db.auth.signInWithPassword({ email: $("email").value.trim(), password: $("password").value });
+      if (error) return msg("login-msg", "Login failed: " + error.message, "err");
+      $("password").value = "";
+      showApp();
+    });
+
+    $("logout").addEventListener("click", async () => {
+      if (dirty && !confirm("You have unsaved notes. Log out anyway?")) return;
+      dirty = false;
+      const { error } = await db.auth.signOut();
+      if (error) msg("global-msg", "Logout failed: " + error.message, "err");
+      showLogin();
+    });
+
+    // ---------- projects list ----------
+    async function fetchProjects() {   // fills the projects list and the quick-add project select
+      msg("global-msg", "");
+      const { data, error } = await db.from("projects")
+        .select("id,name,start_date,end_date,tags,notes_md").order("name");
+      if (error) { msg("global-msg", errText(error), "err"); return false; }
+      projects = data;
+      const ul = $("projects");
+      ul.replaceChildren();
+      if (!projects.length) ul.append(el("li", { class: "meta", text: "No projects yet." }));
+      for (const p of projects) {
+        ul.append(el("li", {},
+          el("button", { type: "button", class: "card project-btn", onclick: () => openProject(p) },
+            el("div", { class: "title", text: p.name }),
+            el("div", { class: "meta", text: projectMeta(p) }))));
+      }
+      const sel = $("j-project"), keep = sel.value;
+      sel.replaceChildren(el("option", { value: "", text: "Choose a project" }));
+      for (const p of projects) sel.append(el("option", { value: p.id, text: p.name }));
+      if (projects.some((p) => String(p.id) === keep)) sel.value = keep;
+      return true;
+    }
+    async function loadProjects() { if (await fetchProjects()) show("list-view"); }
+    function projectMeta(p) {
+      const tags = p.tags.length ? p.tags.join(", ") : "no tags";
+      const dates = p.start_date || p.end_date ? ` · ${p.start_date || "?"} to ${p.end_date || "?"}` : "";
+      return tags + dates;
+    }
+
+    // ---------- journal ----------
+    async function loadJournal() {
+      msg("global-msg", "");
+      const { data, error } = await db.from("actions").select(COLS + ",projects(name)")
+        .order("due_date", { ascending: true, nullsFirst: false }).order("title");
+      if (error) return msg("global-msg", errText(error), "err");
+      jActions = data;
+      renderJournal();
+      show("journal-view");
+    }
+
+    function renderJournal() {
+      const r = dateRanges(), fTag = $("j-tag").value, box = $("journal");
+      const list = jActions.filter((a) => !fTag || a.tags.includes(fTag));
+      const inRange = (a, from, to) => !!a.due_date && a.due_date >= from && a.due_date <= to;
+      const tabs = {   // an action can be in several tabs
+        today:  ["Today", "today and past due", list.filter((a) => a.due_date === r.today || isLate(a))],
+        week:   ["This week", fmtRange(r.weekStart, r.weekEnd), list.filter((a) => inRange(a, r.weekStart, r.weekEnd))],
+        month:  ["This month", fmtRange(r.monthStart, r.monthEnd), list.filter((a) => inRange(a, r.monthStart, r.monthEnd))],
+        next:   ["Next month", fmtRange(r.nextStart, r.nextEnd), list.filter((a) => inRange(a, r.nextStart, r.nextEnd))],
+        nodate: ["No date", "actions without a due date", list.filter((a) => !a.due_date)],
+      };
+      const open = (group) => group.filter((a) => a.status !== "done").length;
+      for (const b of document.querySelectorAll("[data-jtab]")) {
+        const [name, , group] = tabs[b.dataset.jtab];
+        b.textContent = `${name} (${open(group)})`;
+        b.setAttribute("aria-pressed", String(b.dataset.jtab === jTab));
+      }
+      const [name, range, group] = tabs[jTab];
+      const ul = el("ul");
+      if (!group.length) ul.append(el("li", { class: "meta", text: "Nothing here." }));
+      for (const a of group) ul.append(actionItem(a, true));
+      box.replaceChildren(el("h3", { text: `${name} (${open(group)} open)` }), el("p", { class: "meta", text: range }), ul);
+    }
+    for (const b of document.querySelectorAll("[data-jtab]")) {
+      b.addEventListener("click", () => { jTab = b.dataset.jtab; renderJournal(); });
+    }
+    $("j-tag").addEventListener("change", renderJournal);
+
+    $("j-add-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = $("j-title").value.trim(), projectId = $("j-project").value;
+      if (!title) return msg("j-add-msg", "Please enter a title.", "err");
+      if (!projectId) return msg("j-add-msg", "Please choose a project.", "err");
+      const tags = [...$("j-tags").querySelectorAll("input:checked")].map((c) => c.value);
+      msg("j-add-msg", "Adding...");
+      const { data, error } = await insertAction({ project_id: projectId, title, due_date: $("j-due").value || null, tags }, true);
+      if (error) return msg("j-add-msg", errText(error), "err");
+      jActions.push(data);
+      jActions.sort(byDue);
+      e.target.reset();
+      $("j-project").value = projectId;
+      $("j-due").value = todayLocal();
+      msg("j-add-msg", `Added "${title}".`, "ok");
+      renderJournal();
+    });
+
+    // ---------- project detail ----------
+    async function openProject(p) {
+      project = p;
+      msg("global-msg", "");
+      $("p-name").textContent = p.name;
+      $("p-meta").textContent = projectMeta(p);
+      $("p-notes").textContent = p.notes_md || "(no project notes)";
+      $("p-notes-box").open = false;
+      const { data, error } = await db.from("actions").select(COLS)
+        .eq("project_id", p.id)
+        .order("due_date", { ascending: true, nullsFirst: false }).order("title");
+      if (error) return msg("global-msg", errText(error), "err");
+      actions = data;
+      renderActions();
+      show("detail-view");
+    }
+
+    function renderActions() {
+      const box = $("actions"), fStatus = $("f-status").value, fTag = $("f-tag").value;
+      box.replaceChildren();
+      const visible = actions.filter((a) => !fTag || a.tags.includes(fTag));
+      for (const st of STATUSES) {
+        if (fStatus && fStatus !== st) continue;
+        const group = visible.filter((a) => a.status === st);
+        box.append(el("h3", { text: `${st[0].toUpperCase() + st.slice(1)} (${group.length})` }));
+        const ul = el("ul");
+        if (!group.length) ul.append(el("li", { class: "meta", text: "Nothing here." }));
+        for (const a of group) ul.append(actionItem(a));
+        box.append(ul);
+      }
+    }
+
+    // inJournal: show the project name and cross out done items.
+    function actionItem(a, inJournal = false) {
+      const late = isLate(a);
+      return el("li", { class: "card" + (inJournal && a.status === "done" ? " done" : "") },
+        el("div", { class: "title" },
+          late ? icon("⚠️", "past due") : null,
+          a.md_path ? icon("📝", "has notes") : null,
+          a.title),
+        inJournal ? el("div", { class: "meta", text: "Project: " + projectName(a) }) : null,
+        el("div", { class: "meta" + (late ? " late" : ""), text: "Due: " + (a.due_date || "-") + (late ? " (past due)" : "") }),
+        el("div", { class: "meta", text: "Tags: " + (a.tags.length ? a.tags.join(", ") : "-") }),
+        a.description ? el("div", { class: "meta notes-inline", text: a.description }) : null,
+        el("div", { class: "row" },
+          statusSelect(a),
+          a.md_path
+            ? el("button", { type: "button", onclick: () => openNotes(a) }, "Open notes")
+            : el("button", { type: "button", onclick: (e) => addNotes(a, e.currentTarget) }, "Add notes")));
+    }
+
+    function statusSelect(a) {
+      const sel = el("select", { "aria-label": "Status of " + a.title, onchange: () => changeStatus(a, sel) });
+      for (const s of STATUSES) sel.append(el("option", { value: s, text: s }));
+      sel.value = a.status;
+      return sel;
+    }
+
+    async function changeStatus(a, sel) {
+      const old = a.status, next = sel.value;
+      sel.disabled = true;
+      const { error } = await db.from("actions").update({ status: next }).eq("id", a.id);
+      sel.disabled = false;
+      if (error) { sel.value = old; return msg("global-msg", errText(error), "err"); }
+      a.status = next;
+      msg("global-msg", "");
+      tab === "journal" ? renderJournal() : renderActions();
+    }
+
+    // Journal actions carry their project via the embed; project view uses the open project.
+    const projectName = (a) => (a.projects && a.projects.name) || (project && project.id === a.project_id ? project.name : "");
+
+    $("f-status").addEventListener("change", renderActions);
+    $("f-tag").addEventListener("change", renderActions);
+    $("back-to-list").addEventListener("click", () => { msg("global-msg", ""); show("list-view"); });
+
+    // ---------- add action ----------
+    const insertAction = (row, withProject = false) =>
+      db.from("actions").insert(row).select(COLS + (withProject ? ",projects(name)" : "")).single();
+
+    $("add-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = $("a-title").value.trim();
+      if (!title) return msg("add-msg", "Please enter a title.", "err");
+      const tags = [...$("a-tags").querySelectorAll("input:checked")].map((c) => c.value);
+      msg("add-msg", "Adding...");
+      const { data, error } = await insertAction({ project_id: project.id, title, due_date: $("a-due").value || null, tags });
+      if (error) return msg("add-msg", errText(error), "err");
+      actions.push(data);
+      actions.sort(byDue);
+      e.target.reset();
+      msg("add-msg", `Added "${title}".`, "ok");
+      renderActions();
+    });
+
+    // ---------- action notes ----------
+    async function addNotes(a, btn) {
+      const pname = projectName(a);   // the action's own project, so this works from the journal too
+      if (!pname) return msg("global-msg", "Could not find the project of this action. Reload and try again.", "err");
+      btn.disabled = true;
+      const text = notesTemplate(a, pname);
+      const base = `TasksAndActions/${slug(pname)}/${slug(a.title).slice(0, 60).replace(/^-+|-+$/g, "")}`;
+      for (let n = 1; n <= 50; n++) {
+        const md_path = n === 1 ? `${base}.md` : `${base}-${n}.md`;
+        if (!MD_PATH_RE.test(md_path)) { btn.disabled = false; return msg("global-msg", "Could not make a valid file name for this action.", "err"); }
+        const { data, error } = await db.from("actions").update({ md_path, notes_md: text })
+          .eq("id", a.id).is("md_path", null).select("md_path,notes_md");
+        if (error && error.code === "23505") continue;   // file name taken, try -2, -3, ...
+        if (error) { btn.disabled = false; return msg("global-msg", errText(error), "err"); }
+        if (!data.length) { btn.disabled = false; return msg("global-msg", "This action already has notes. Reload the project.", "err"); }
+        a.md_path = data[0].md_path; a.notes_md = data[0].notes_md;
+        return openNotes(a);
+      }
+      btn.disabled = false;
+      msg("global-msg", "Could not find a free file name.", "err");
+    }
+
+    function openNotes(a) {
+      noteAction = a; dirty = false;
+      $("n-title").textContent = a.title;
+      $("n-path").textContent = "File: " + a.md_path;
+      $("n-text").value = a.notes_md || "";
+      msg("n-msg", ""); msg("global-msg", "");
+      show("notes-view");
+    }
+
+    $("n-text").addEventListener("input", () => { dirty = true; msg("n-msg", "Unsaved changes.", ""); });
+
+    $("n-save").addEventListener("click", async () => {
+      const btn = $("n-save"), text = $("n-text").value;
+      btn.disabled = true; msg("n-msg", "Saving...");
+      const { error } = await db.from("actions").update({ notes_md: text }).eq("id", noteAction.id);
+      btn.disabled = false;
+      if (error) return msg("n-msg", errText(error), "err");
+      noteAction.notes_md = text;
+      if ($("n-text").value === text) dirty = false;
+      msg("n-msg", "Saved at " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ".", "ok");
+    });
+
+    $("back-to-detail").addEventListener("click", () => {
+      if (dirty && !confirm("You have unsaved notes. Leave without saving?")) return;
+      dirty = false;
+      if (tab === "journal") { renderJournal(); show("journal-view"); }
+      else { renderActions(); show("detail-view"); }
+    });
+
+    window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+    // ---------- start ----------
+    (async () => {
+      const cfg = window.SUPABASE_CONFIG;
+      if (!cfg || !cfg.url || !cfg.publishableKey) {
+        return msg("global-msg", "Config missing: copy config.example.js to config.js and fill in the URL and publishable key.", "err");
+      }
+      if (typeof supabase === "undefined") {
+        return msg("global-msg", "Could not load supabase-js from the CDN. Check your internet connection and reload.", "err");
+      }
+      for (const s of STATUSES) $("f-status").append(el("option", { value: s, text: s }));
+      for (const t of ACTION_TAGS) {
+        $("f-tag").append(el("option", { value: t, text: t }));
+        $("j-tag").append(el("option", { value: t, text: t }));
+        $("a-tags").append(el("label", {}, el("input", { type: "checkbox", value: t }), t));
+        $("j-tags").append(el("label", {}, el("input", { type: "checkbox", value: t }), t));
+      }
+      $("j-due").value = todayLocal();
+
+      db = supabase.createClient(cfg.url, cfg.publishableKey);
+      const { data, error } = await db.auth.getSession();
+      if (error) msg("global-msg", errText(error), "err");
+      data && data.session ? showApp() : showLogin();
+
+      db.auth.onAuthStateChange((event, session) => {
+        // Don't await supabase calls inside this callback; defer them.
+        if (!session) setTimeout(showLogin, 0);
+        else if (event === "SIGNED_IN") setTimeout(showApp, 0);
+      });
+    })();
+  </script>
+</body>
+</html>
