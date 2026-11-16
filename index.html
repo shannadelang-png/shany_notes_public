@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <title>Shany Notes</title>
   <style>
     * { box-sizing: border-box; }
@@ -42,6 +44,11 @@
     .tabs button[aria-pressed=true] { background: #1f4f99; border-color: #1f4f99; color: #fff; font-weight: 600; }
     .done { color: #5f5f5f; background: #f2f2f2; }
     .done .title { text-decoration: line-through; font-weight: normal; }
+    /* click-to-edit text (due date, tags on action cards) */
+    .edit-text { min-height: 44px; padding: 0 .3rem; margin-left: -.3rem; border: 0; border-radius: 6px; background: none;
+                 color: inherit; font-size: inherit; font-weight: inherit; text-align: left;
+                 text-decoration: underline dotted; text-underline-offset: 3px; }
+    .edit-text:hover { background: #eef2f8; text-decoration-style: solid; }
   </style>
 </head>
 <body>
@@ -113,6 +120,23 @@
       <div id="p-notes" class="notes"></div>
     </details>
 
+    <details id="a-add-box" class="card" style="margin-top:.6rem">
+      <summary>Quick add</summary>
+      <form id="add-form">
+        <p id="a-project" class="meta"></p>
+        <label for="a-title">Title</label>
+        <input id="a-title" required>
+        <label for="a-due">Due date</label>
+        <input id="a-due" type="date">
+        <fieldset style="border:0;padding:0;margin:.75rem 0 0">
+          <legend style="font-weight:600">Tags</legend>
+          <div id="a-tags" class="tags"></div>
+        </fieldset>
+        <div class="row"><button class="primary" type="submit">Add action</button></div>
+        <p id="add-msg" class="msg" role="status"></p>
+      </form>
+    </details>
+
     <h3>Actions</h3>
     <div class="filters">
       <div><label for="f-status">Status</label>
@@ -120,22 +144,9 @@
       <div><label for="f-tag">Tag</label>
         <select id="f-tag"><option value="">All tags</option></select></div>
     </div>
-    <p class="meta">Sorted by due date (no date last).</p>
+    <p class="meta">Sorted by due date, newest first within the same date.</p>
     <div id="actions"></div>
 
-    <h3>Add action</h3>
-    <form id="add-form" class="card">
-      <label for="a-title">Title</label>
-      <input id="a-title" required>
-      <label for="a-due">Due date (optional)</label>
-      <input id="a-due" type="date">
-      <fieldset style="border:0;padding:0;margin:.75rem 0 0">
-        <legend style="font-weight:600">Tags</legend>
-        <div id="a-tags" class="tags"></div>
-      </fieldset>
-      <div class="row"><button class="primary" type="submit">Add action</button></div>
-      <p id="add-msg" class="msg" role="status"></p>
-    </form>
   </section>
 
   <!-- Action notes editor -->
@@ -159,7 +170,7 @@
 
     const $ = (id) => document.getElementById(id);
     const VIEWS = ["login", "journal-view", "list-view", "detail-view", "notes-view"];
-    const COLS = "id,project_id,title,description,due_date,status,tags,md_path,notes_md";
+    const COLS = "id,project_id,title,description,due_date,status,tags,md_path,notes_md,created_at";
     let db = null, projects = [], project = null, actions = [], noteAction = null, dirty = false, appShown = false;
     let tab = "journal", jActions = [], jTab = "today";   // jTab = active journal sub-tab
 
@@ -200,7 +211,8 @@
     }
     const isLate = (a) => !!a.due_date && a.due_date < todayLocal() && a.status !== "done";
     const byDue = (x, y) => (x.due_date || "9999") < (y.due_date || "9999") ? -1
-                          : (x.due_date || "9999") > (y.due_date || "9999") ? 1 : x.title.localeCompare(y.title);
+                          : (x.due_date || "9999") > (y.due_date || "9999") ? 1
+                          : (y.created_at || "").localeCompare(x.created_at || "");   // same date: newest first
 
     // Same as scripts/shany_db.py slug()
     const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "untitled";
@@ -295,7 +307,7 @@
     async function loadJournal() {
       msg("global-msg", "");
       const { data, error } = await db.from("actions").select(COLS + ",projects(name)")
-        .order("due_date", { ascending: true, nullsFirst: false }).order("title");
+        .order("due_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
       if (error) return msg("global-msg", errText(error), "err");
       jActions = data;
       renderJournal();
@@ -320,10 +332,16 @@
         b.setAttribute("aria-pressed", String(b.dataset.jtab === jTab));
       }
       const [name, range, group] = tabs[jTab];
+      const current = group.filter((a) => !isLate(a)), late = group.filter(isLate);   // overdue goes in its own list at the bottom
       const ul = el("ul");
-      if (!group.length) ul.append(el("li", { class: "meta", text: "Nothing here." }));
-      for (const a of group) ul.append(actionItem(a, true));
+      if (!current.length) ul.append(el("li", { class: "meta", text: "Nothing here." }));
+      for (const a of current) ul.append(actionItem(a, true));
       box.replaceChildren(el("h3", { text: `${name} (${open(group)} open)` }), el("p", { class: "meta", text: range }), ul);
+      if (late.length) {
+        const lateUl = el("ul");
+        for (const a of late) lateUl.append(actionItem(a, true));
+        box.append(el("h3", { text: `Overdue (${late.length})` }), lateUl);
+      }
     }
     for (const b of document.querySelectorAll("[data-jtab]")) {
       b.addEventListener("click", () => { jTab = b.dataset.jtab; renderJournal(); });
@@ -356,9 +374,14 @@
       $("p-meta").textContent = projectMeta(p);
       $("p-notes").textContent = p.notes_md || "(no project notes)";
       $("p-notes-box").open = false;
+      $("a-add-box").open = false;
+      $("add-form").reset();
+      $("a-project").textContent = "Project: " + p.name;
+      $("a-due").value = todayLocal();
+      msg("add-msg", "");
       const { data, error } = await db.from("actions").select(COLS)
         .eq("project_id", p.id)
-        .order("due_date", { ascending: true, nullsFirst: false }).order("title");
+        .order("due_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
       if (error) return msg("global-msg", errText(error), "err");
       actions = data;
       renderActions();
@@ -371,12 +394,18 @@
       const visible = actions.filter((a) => !fTag || a.tags.includes(fTag));
       for (const st of STATUSES) {
         if (fStatus && fStatus !== st) continue;
-        const group = visible.filter((a) => a.status === st);
+        const group = visible.filter((a) => a.status === st && !isLate(a));
         box.append(el("h3", { text: `${st[0].toUpperCase() + st.slice(1)} (${group.length})` }));
         const ul = el("ul");
         if (!group.length) ul.append(el("li", { class: "meta", text: "Nothing here." }));
         for (const a of group) ul.append(actionItem(a));
         box.append(ul);
+      }
+      const late = visible.filter((a) => isLate(a) && (!fStatus || a.status === fStatus));   // own list at the bottom
+      if (late.length) {
+        const ul = el("ul");
+        for (const a of late) ul.append(actionItem(a));
+        box.append(el("h3", { text: `Overdue (${late.length})` }), ul);
       }
     }
 
@@ -389,8 +418,8 @@
           a.md_path ? icon("📝", "has notes") : null,
           a.title),
         inJournal ? el("div", { class: "meta", text: "Project: " + projectName(a) }) : null,
-        el("div", { class: "meta" + (late ? " late" : ""), text: "Due: " + (a.due_date || "-") + (late ? " (past due)" : "") }),
-        el("div", { class: "meta", text: "Tags: " + (a.tags.length ? a.tags.join(", ") : "-") }),
+        dueField(a, late),
+        tagsField(a),
         a.description ? el("div", { class: "meta notes-inline", text: a.description }) : null,
         el("div", { class: "row" },
           statusSelect(a),
@@ -417,6 +446,82 @@
       tab === "journal" ? renderJournal() : renderActions();
     }
 
+    // ---------- click-to-edit due date and tags ----------
+    let closeEditor = null;   // cancels the field that is in edit mode now (only one at a time)
+    const pencil = () => el("span", { "aria-hidden": "true", text: " ✏️" });
+
+    // Swaps the text button in `wrap` for `editor`. Returns finish(save, focus), which runs only once.
+    function startEdit(a, wrap, btn, editor, getPatch) {
+      if (closeEditor) closeEditor();   // close the other open field without saving
+      let finished = false;
+      const restore = (focus) => { wrap.replaceChildren(btn); if (focus) btn.focus(); };
+      const finish = (save, focus = false) => {
+        if (finished) return;   // e.g. Escape removes the input, which can also fire blur
+        finished = true;
+        if (closeEditor === cancel) closeEditor = null;
+        save ? saveField(a, getPatch(), editor, restore) : restore(focus);
+      };
+      const cancel = () => finish(false);
+      closeEditor = cancel;
+      wrap.replaceChildren(editor);
+      editor.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); finish(false, true); } });
+      return finish;
+    }
+
+    function dueField(a, late) {
+      const wrap = el("div", { class: "meta" + (late ? " late" : "") });
+      const btn = el("button", { type: "button", class: "edit-text", title: "Click to change the due date", onclick: () => {
+        const input = el("input", { type: "date", "aria-label": "Due date of " + a.title });
+        input.value = a.due_date || "";
+        const finish = startEdit(a, wrap, btn, input, () => ({ due_date: input.value || null }));
+        let typing = false;   // typing a date fires change per digit, so then save on Enter/blur only
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); finish(true); }
+          else if (e.key !== "Escape" && e.key !== "Tab") typing = true;
+        });
+        input.addEventListener("change", () => { if (!typing) finish(true); });
+        // Moving to another editable field = close without saving; any other blur saves.
+        input.addEventListener("blur", (e) => finish(!(e.relatedTarget && e.relatedTarget.classList.contains("edit-text"))));
+        input.focus();
+      } }, "Due: " + (a.due_date || "-") + (late ? " (past due)" : ""), pencil());
+      wrap.append(btn);
+      return wrap;
+    }
+
+    function tagsField(a) {
+      const wrap = el("div", { class: "meta" });
+      const btn = el("button", { type: "button", class: "edit-text", title: "Click to change the tags", onclick: () => {
+        const box = el("div", { class: "tags", role: "group", "aria-label": "Tags of " + a.title });
+        for (const t of ACTION_TAGS) {
+          const cb = el("input", { type: "checkbox", value: t });
+          cb.checked = a.tags.includes(t);
+          box.append(el("label", {}, cb, t));
+        }
+        const done = el("button", { type: "button", text: "Done" });
+        const editor = el("div", {}, box, el("div", { class: "row" }, done));
+        const finish = startEdit(a, wrap, btn, editor,
+          () => ({ tags: [...box.querySelectorAll("input:checked")].map((c) => c.value) }));
+        done.addEventListener("click", () => finish(true));
+        box.querySelector("input").focus();
+      } }, "Tags: " + (a.tags.length ? a.tags.join(", ") : "-"), pencil());
+      wrap.append(btn);
+      return wrap;
+    }
+
+    // Shared save for click-to-edit fields (modeled on changeStatus).
+    async function saveField(a, patch, editor, restore) {
+      const norm = (v) => JSON.stringify(Array.isArray(v) ? [...v].sort() : v);
+      if (Object.keys(patch).every((k) => norm(patch[k]) === norm(a[k]))) return restore(editor.contains(document.activeElement));   // nothing changed; don't steal focus after a blur
+      const ctrls = editor.matches("input") ? [editor] : [...editor.querySelectorAll("input, button")];
+      ctrls.forEach((c) => (c.disabled = true));
+      const { error } = await db.from("actions").update(patch).eq("id", a.id);
+      if (error) { restore(false); return msg("global-msg", errText(error), "err"); }   // card keeps the old value
+      Object.assign(a, patch);
+      msg("global-msg", "");
+      if (tab === "journal") { jActions.sort(byDue); renderJournal(); }
+      else { actions.sort(byDue); renderActions(); }
+    }
+
     // Journal actions carry their project via the embed; project view uses the open project.
     const projectName = (a) => (a.projects && a.projects.name) || (project && project.id === a.project_id ? project.name : "");
 
@@ -439,6 +544,7 @@
       actions.push(data);
       actions.sort(byDue);
       e.target.reset();
+      $("a-due").value = todayLocal();   // box stays open for the next one
       msg("add-msg", `Added "${title}".`, "ok");
       renderActions();
     });
